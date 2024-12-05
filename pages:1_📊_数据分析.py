@@ -1,0 +1,62 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+
+# 设置页面配置
+st.set_page_config(page_title="一键导入，即刻洞察", page_icon="📊", layout="wide")
+
+# 上传CSV文件
+uploaded_file = st.sidebar.file_uploader("上传CSV文件", type=['csv'])
+
+# 加载数据
+@st.cache_data
+def load_data(file):
+    if file is not None:
+        df = pd.read_csv(file)
+        df['Purchase Amount (USD)'] = pd.to_numeric(df['Purchase Amount (USD)'], errors='coerce')
+        return df
+    return None
+
+df = load_data(uploaded_file)
+
+if df is not None:
+    # 数据概览
+    st.title('一键导入，即刻洞察')
+    st.metric("总销售额", f"${df['Purchase Amount (USD)'].sum():,.2f}")
+    st.metric("总订单数", f"{len(df):,}")
+    st.metric("平均订单金额", f"${df['Purchase Amount (USD)'].mean():,.2f}")
+    st.metric("用户数量", f"{df['Customer ID'].nunique():,}")
+
+    # 数据筛选
+    age_range = st.sidebar.slider("选择年龄范围", int(df['Age'].min()), int(df['Age'].max()), (20, 60))
+    gender = st.sidebar.selectbox("选择性别", ['All', 'Male', 'Female'])
+    category = st.sidebar.multiselect("选择商品类别", df['Category'].unique(), default=df['Category'].unique())
+
+    # 应用筛选条件
+    filtered_df = df[(df['Age'] >= age_range[0]) & (df['Age'] <= age_range[1])]
+    if gender != 'All':
+        filtered_df = filtered_df[filtered_df['Gender'] == gender]
+    filtered_df = filtered_df[filtered_df['Category'].isin(category)]
+
+    # 可视化分析
+    st.subheader("销售趋势分析")
+    fig_sales = px.histogram(filtered_df, x='Age', y='Purchase Amount (USD)', color='Category', barmode='group')
+    st.plotly_chart(fig_sales, use_container_width=True)
+
+    st.subheader("商品类别分析")
+    fig_category = px.pie(filtered_df, names='Category', values='Purchase Amount (USD)', title='商品类别销售额占比')
+    st.plotly_chart(fig_category, use_container_width=True)
+
+    st.subheader("地区销售分析")
+    fig_location = px.bar(filtered_df, x='Location', y='Purchase Amount (USD)', color='Category', title='地区销售额分布')
+    st.plotly_chart(fig_location, use_container_width=True)
+
+    # 数据下载
+    st.download_button(
+        label="下载筛选后的数据",
+        data=filtered_df.to_csv(index=False),
+        file_name='filtered_data.csv',
+        mime='text/csv'
+    )
+else:
+    st.warning("请上传CSV文件以进行分析。")
